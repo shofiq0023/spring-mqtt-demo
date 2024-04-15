@@ -1,6 +1,7 @@
 package com.mqttdemo.config;
 
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.integration.annotation.ServiceActivator;
@@ -19,15 +20,24 @@ import org.springframework.messaging.MessagingException;
 
 @Configuration
 public class MqttConfig {
+	
+	@Value("${mqtt_server_url}")
+	private String mqttServerUrl;
+	
+	@Value("${mqtt_username}")
+	private String brokerUsername;
+	
+	@Value("${mqtt_password}")
+	private String brokerPassword;
 
     @Bean
     MqttPahoClientFactory mqttClientFactor() {
 		DefaultMqttPahoClientFactory factory = new DefaultMqttPahoClientFactory();
 		MqttConnectOptions connectOptions = new MqttConnectOptions();
 		
-		connectOptions.setServerURIs(new String[] {"tcp://localhost:1883"});
-		connectOptions.setUserName("admin");
-		connectOptions.setPassword("123456".toCharArray());
+		connectOptions.setServerURIs(new String[] {mqttServerUrl});
+		connectOptions.setUserName(brokerUsername);
+		connectOptions.setPassword(brokerPassword.toCharArray());
 		connectOptions.setCleanSession(true);
 		
 		factory.setConnectionOptions(connectOptions);
@@ -47,7 +57,7 @@ public class MqttConfig {
     
     @Bean
     MessageProducer inbound() {
-    	MqttPahoMessageDrivenChannelAdapter adapter = new MqttPahoMessageDrivenChannelAdapter("serverIn", mqttClientFactor(), "#");
+    	MqttPahoMessageDrivenChannelAdapter adapter = new MqttPahoMessageDrivenChannelAdapter("serverIn", mqttClientFactor(), "my_topic");
     	
     	adapter.setCompletionTimeout(5000);
     	adapter.setConverter(new DefaultPahoMessageConverter());
@@ -79,13 +89,18 @@ public class MqttConfig {
     @Bean
     @ServiceActivator(inputChannel = "mqttOutboundChannel")
     MessageHandler outboundMessageHandler() {
-    	MqttPahoMessageHandler messageHandler = new MqttPahoMessageHandler("serverOut", mqttClientFactor());
-    	
-    	messageHandler.setAsync(true);
-    	messageHandler.setDefaultTopic("#");
-    	messageHandler.setDefaultRetained(false);
-    	
-    	return messageHandler;
+    	try {
+    		MqttPahoMessageHandler messageHandler = new MqttPahoMessageHandler("serverOut", mqttClientFactor());
+        	
+        	messageHandler.setAsync(true);
+        	messageHandler.setDefaultTopic("my_topic");
+        	messageHandler.setDefaultRetained(false);
+        	
+        	return messageHandler;
+		} catch (Exception e) {
+			System.out.println("There was an error!");
+			return null;
+		}
     }
 }
 
