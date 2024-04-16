@@ -1,6 +1,7 @@
 package com.mqttdemo.config;
 
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,6 +19,8 @@ import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
 import org.springframework.messaging.MessagingException;
 
+import com.mqttdemo.services.UserTraceService;
+
 @Configuration
 public class MqttConfig {
 	
@@ -29,6 +32,9 @@ public class MqttConfig {
 	
 	@Value("${mqtt_password}")
 	private String brokerPassword;
+	
+	@Autowired
+	private UserTraceService userTraceService;
 
     @Bean
     MqttPahoClientFactory mqttClientFactor() {
@@ -57,7 +63,10 @@ public class MqttConfig {
     
     @Bean
     MessageProducer inbound() {
-    	MqttPahoMessageDrivenChannelAdapter adapter = new MqttPahoMessageDrivenChannelAdapter("serverIn", mqttClientFactor(), "my_topic");
+		MqttPahoMessageDrivenChannelAdapter adapter = new MqttPahoMessageDrivenChannelAdapter(
+				"serverIn",
+				mqttClientFactor(), 
+				new String[] { MessageTopic.MY_TOPIC.value(), MessageTopic.USER_TRACE.value() });
     	
     	adapter.setCompletionTimeout(5000);
     	adapter.setConverter(new DefaultPahoMessageConverter());
@@ -76,12 +85,13 @@ public class MqttConfig {
 			public void handleMessage(Message<?> message) throws MessagingException {
 				String topic = message.getHeaders().get(MqttHeaders.RECEIVED_TOPIC).toString();
 				
-				if (topic.equals("my_topic")) {
-					System.out.println("Received out topic");
+				if (topic.equals(MessageTopic.MY_TOPIC.value())) {
+					System.out.println(message.getPayload());
 				}
 				
-				System.out.println(message.getPayload());
-				
+				if (topic.equals(MessageTopic.USER_TRACE.value())) {
+					userTraceService.saveUserTrace(message.getPayload().toString());
+				}
 			}
 		};
     }
@@ -89,18 +99,13 @@ public class MqttConfig {
     @Bean
     @ServiceActivator(inputChannel = "mqttOutboundChannel")
     MessageHandler outboundMessageHandler() {
-    	try {
-    		MqttPahoMessageHandler messageHandler = new MqttPahoMessageHandler("serverOut", mqttClientFactor());
-        	
-        	messageHandler.setAsync(true);
-        	messageHandler.setDefaultTopic("my_topic");
-        	messageHandler.setDefaultRetained(false);
-        	
-        	return messageHandler;
-		} catch (Exception e) {
-			System.out.println("There was an error!");
-			return null;
-		}
+    	MqttPahoMessageHandler messageHandler = new MqttPahoMessageHandler("serverOut", mqttClientFactor());
+    	
+    	messageHandler.setAsync(true);
+    	messageHandler.setDefaultTopic("myTopic");
+    	messageHandler.setDefaultRetained(false);
+    	
+    	return messageHandler;
     }
 }
 
